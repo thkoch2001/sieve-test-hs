@@ -2,13 +2,11 @@
 
 import           Control.Applicative ((<*), (*>))
 import           Control.Monad (when)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString.Lazy.Char8 as BSLC
-import qualified Data.Text as T
+import qualified Data.ByteString.Char8 as BSC (pack)
+import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
+import qualified Data.Text as T (pack, unpack)
 import           GHC.IO.Exception (ExitCode(..))
-import           Network.Mail.Mime
+import           Network.Mail.Mime (Address(Address), emptyMail, Mail(..), Part(..), Encoding(..), renderMail')
 import           System.Directory (getTemporaryDirectory, removeFile)
 import           System.IO (hClose)
 import           System.IO.Temp (openBinaryTempFile)
@@ -108,7 +106,7 @@ parseSieveTestResult = do
       return [action]
     storeAction :: Parser Action
     storeAction = do
-      folder <- string "store message in folder: " *> many1 $ noneOf "\n"
+      folder <- string "store message in folder: " *> many1 (noneOf "\n")
       return $ Store folder
 
 assertMailActions :: Mail -> Actions -> IO ()
