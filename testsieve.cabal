@@ -55,4 +55,5 @@ executable testsieve
                        temporary,
                        directory,
                        process,
-                       parsec == 3.1.2
+                       parsec == 3.1.2,
+                       hunit == 1.2.4.2

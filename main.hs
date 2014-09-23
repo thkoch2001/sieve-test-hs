@@ -1,18 +1,23 @@
 {-# OPTIONS_GHC -w -fno-warn-orphans #-}
 
 import           Control.Applicative ((<*), (*>))
+import           Control.Monad (when)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as BSLC
 import qualified Data.Text as T
+import           GHC.IO.Exception (ExitCode(..))
 import           Network.Mail.Mime
 import           System.Directory (getTemporaryDirectory, removeFile)
+import           System.IO (hClose)
 import           System.IO.Temp (openBinaryTempFile)
 import           System.Process (readProcessWithExitCode)
+import           Test.HUnit.Base (assertFailure, assertEqual)
 import           Text.Parsec (parse)
 import           Text.Parsec.Char (string, anyChar, char, noneOf)
 import           Text.Parsec.Combinator (many1, between, choice)
+import           Text.Parsec.Error (ParseError)
 import           Text.Parsec.Prim ((<|>))
 import           Text.Parsec.String (Parser)
 
@@ -22,10 +27,10 @@ addressS s = Address Nothing $ T.pack s
 addressL :: String -> String -> Address
 addressL s t = Address (Just $ T.pack s) $ T.pack t
 
-addHeader :: Mail -> String -> String -> Mail
-addHeader m name value = m { mailHeaders = new }
+addHeader :: Mail -> (String, String) -> Mail
+addHeader m (name, value) = m { mailHeaders = new }
   where
-    new = (mailHeaders m) ++ [(BSC.pack name, T.pack value)]
+    new = mailHeaders m ++ [(BSC.pack name, T.pack value)]
 
 textPart :: String -> Part
 textPart t = Part {
@@ -39,7 +44,7 @@ textPart t = Part {
 -- added no-warn-orphans for this declaration
 instance Show Address where
   show (Address Nothing addr) = T.unpack addr
-  show (Address (Just name) addr) = (T.unpack name) ++ " <" ++ (T.unpack addr) ++ ">"
+  show (Address (Just name) addr) = T.unpack name ++ " <" ++ (T.unpack addr) ++ ">"
 
 nilMail :: Mail
 nilMail = (emptyMail $ addressS "nobody@example.com") {
@@ -52,31 +57,31 @@ writeMailTemp mail = do
     pathAndHandle <- openBinaryTempFile tempDir "testsieve.mail"
     renderedMail <- renderMail' mail
     BSLC.hPutStr (snd pathAndHandle) renderedMail
+    hClose $ snd pathAndHandle
     return $ fst pathAndHandle
-
-runSieveTest :: FilePath -> FilePath -> IO String
-runSieveTest filter mail = do
-    (exitCode, stdout, stderr) <- readProcessWithExitCode "sieve-test" args ""
-    return stdout
-  where
-    args :: [String]
-    args = [filter, mail]
 
 runSieveTestWithMail :: FilePath -> Mail -> IO String
 runSieveTestWithMail filter mail = do
   mailFile <- writeMailTemp mail
-  stdout <- runSieveTest filter mailFile
+  result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", "regex variables fileinto envelope", filter, mailFile] ""
+  when (exitCode /= ExitSuccess) $ assertFailure $ formatFailure result mailFile
   removeFile mailFile
   return stdout
-
-out :: String
-out = "\nPerformed actions:\n\n  (none)\n\nImplicit keep:\n\n * store message in folder: INBOX\n\n"
+  where
+    formatFailure :: (ExitCode, String, String) -> FilePath -> String
+    formatFailure ((ExitFailure (code)), stdout, stderr) mailFile =
+       "error code " ++ (show code) ++ " for sieve-test on '"
+       ++ mailFile ++ "':\n"
+       ++ "stdout:\n" ++ stdout
+       ++ "\nstderr:\n" ++ stderr
 
 data Action =
   Store String
   deriving (Show, Eq, Ord)
 
-parseSieveTestResult :: Parser ([Action], [Action])
+type Actions = ([Action], [Action])
+
+parseSieveTestResult :: Parser Actions
 parseSieveTestResult = do
     string "\nPerformed actions:\n\n"
     performedActions <- actionLines
@@ -106,6 +111,28 @@ parseSieveTestResult = do
       folder <- (string "store message in folder: ") *> (many1 $ noneOf "\n")
       return $ Store folder
 
+assertMailActions :: Mail -> Actions -> IO ()
+assertMailActions mail expectedActions = do
+    sieveTestOut <- runSieveTestWithMail "/home/thkoch/testsieve" mail
+    actualActions <- parseSieveTestOut sieveTestOut
+    assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
+    return ()
+  where
+    parseSieveTestOut :: String -> IO Actions
+    parseSieveTestOut s = case (parse parseSieveTestResult "" s) of
+      (Left error) -> do
+        assertFailure $ "could not parse output from sieve-test:\n"
+          ++ show error
+          ++ "output was:\n"
+          ++ s
+        return ([], [])
+      (Right actions) -> do return actions
+
+assertMailStoredIn :: Mail -> String -> IO ()
+assertMailStoredIn mail folder = assertMailActions mail ([Store folder], [])
+
+assertHeaderStoredIn :: (String, String) -> String -> IO ()
+assertHeaderStoredIn header folder = assertMailStoredIn (addHeader nilMail header) folder
 
 main :: IO()
 main = do
