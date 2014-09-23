@@ -15,8 +15,8 @@ import           System.IO.Temp (openBinaryTempFile)
 import           System.Process (readProcessWithExitCode)
 import           Test.HUnit.Base (assertFailure, assertEqual)
 import           Text.Parsec (parse)
-import           Text.Parsec.Char (string, anyChar, char, noneOf)
-import           Text.Parsec.Combinator (many1, between, choice)
+import           Text.Parsec.Char (string, char, noneOf)
+import           Text.Parsec.Combinator (many1, choice)
 import           Text.Parsec.Error (ParseError)
 import           Text.Parsec.Prim ((<|>))
 import           Text.Parsec.String (Parser)
@@ -44,7 +44,7 @@ textPart t = Part {
 -- added no-warn-orphans for this declaration
 instance Show Address where
   show (Address Nothing addr) = T.unpack addr
-  show (Address (Just name) addr) = T.unpack name ++ " <" ++ (T.unpack addr) ++ ">"
+  show (Address (Just name) addr) = T.unpack name ++ " <" ++ T.unpack addr ++ ">"
 
 nilMail :: Mail
 nilMail = (emptyMail $ addressS "nobody@example.com") {
@@ -69,8 +69,8 @@ runSieveTestWithMail filter mail = do
   return stdout
   where
     formatFailure :: (ExitCode, String, String) -> FilePath -> String
-    formatFailure ((ExitFailure (code)), stdout, stderr) mailFile =
-       "error code " ++ (show code) ++ " for sieve-test on '"
+    formatFailure (ExitFailure code, stdout, stderr) mailFile =
+       "error code " ++ show code ++ " for sieve-test on '"
        ++ mailFile ++ "':\n"
        ++ "stdout:\n" ++ stdout
        ++ "\nstderr:\n" ++ stderr
@@ -88,7 +88,7 @@ parseSieveTestResult = do
     string "\nImplicit keep:\n\n"
     implicitKeep <- actionLines
     char '\n'
-    return $ (performedActions, implicitKeep)
+    return (performedActions, implicitKeep)
   where
     actionLines :: Parser [Action]
     actionLines = fmap concat $ many1 actionLine
@@ -108,7 +108,7 @@ parseSieveTestResult = do
       return [action]
     storeAction :: Parser Action
     storeAction = do
-      folder <- (string "store message in folder: ") *> (many1 $ noneOf "\n")
+      folder <- string "store message in folder: " *> many1 $ noneOf "\n"
       return $ Store folder
 
 assertMailActions :: Mail -> Actions -> IO ()
@@ -119,21 +119,20 @@ assertMailActions mail expectedActions = do
     return ()
   where
     parseSieveTestOut :: String -> IO Actions
-    parseSieveTestOut s = case (parse parseSieveTestResult "" s) of
+    parseSieveTestOut s = case parse parseSieveTestResult "" s of
       (Left error) -> do
         assertFailure $ "could not parse output from sieve-test:\n"
           ++ show error
           ++ "output was:\n"
           ++ s
         return ([], [])
-      (Right actions) -> do return actions
+      (Right actions) -> return actions
 
 assertMailStoredIn :: Mail -> String -> IO ()
 assertMailStoredIn mail folder = assertMailActions mail ([Store folder], [])
 
 assertHeaderStoredIn :: (String, String) -> String -> IO ()
-assertHeaderStoredIn header folder = assertMailStoredIn (addHeader nilMail header) folder
+assertHeaderStoredIn header = assertMailStoredIn (addHeader nilMail header)
 
 main :: IO()
-main = do
-  print "hi"
+main = print "hi"
