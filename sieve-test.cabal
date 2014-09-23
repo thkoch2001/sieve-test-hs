@@ -51,13 +51,25 @@ library
                        directory,
                        process,
                        parsec == 3.1.2,
-                       hunit
---                       hunit == 1.2.4.2
+                       HUnit == 1.2.4.2,
+                       text == 0.11.2.0,
+                       bytestring == 0.9.2.1
 
 executable sieve-test-hs
   -- .hs or .lhs file containing the Main module.
   -- main-is:
   main-is: main.hs
+  build-depends:       base == 4.5.*,
+                       mime-mail == 0.4.1.1,
+                       temporary,
+                       directory,
+                       process,
+                       parsec == 3.1.2,
+                       HUnit == 1.2.4.2,
+                       text == 0.11.2.0,
+                       bytestring == 0.9.2.1,
+                       network-sieve-test
+
   -- Modules included in this executable, other than Main.
   -- other-modules:
 

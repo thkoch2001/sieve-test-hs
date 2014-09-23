@@ -1,4 +1,4 @@
-module Ro.Koch.SieveTest where
+module Main where
 
 import Network.Sieve.Test
 
