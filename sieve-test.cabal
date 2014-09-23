@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 -- The name of the package.
-name:                testsieve
+name:                network-sieve-test
 
 -- The package version.  See the Haskell package versioning policy (PVP)
 -- for standards guiding when and how versions should be incremented.
@@ -41,8 +41,20 @@ build-type:          Simple
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.8
 
+library
+  exposed-modules:
+    Network.Sieve.Test
 
-executable testsieve
+  build-depends:       base == 4.5.*,
+                       mime-mail == 0.4.1.1,
+                       temporary,
+                       directory,
+                       process,
+                       parsec == 3.1.2,
+                       hunit
+--                       hunit == 1.2.4.2
+
+executable sieve-test-hs
   -- .hs or .lhs file containing the Main module.
   -- main-is:
   main-is: main.hs
@@ -50,10 +62,3 @@ executable testsieve
   -- other-modules:
 
   -- Other library packages from which modules are imported.
-  build-depends:       base ==4.5.*,
-                       mime-mail == 0.4.1.1,
-                       temporary,
-                       directory,
-                       process,
-                       parsec == 3.1.2,
-                       hunit == 1.2.4.2
