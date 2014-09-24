@@ -83,7 +83,7 @@ writeMailTemp mail = do
 runSieveTestWithMail :: FilePath -> Mail -> IO String
 runSieveTestWithMail filter mail = do
   mailFile <- writeMailTemp mail
-  result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", "regex variables fileinto envelope", filter, mailFile] ""
+  result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", "regex variables fileinto envelope mailbox", filter, mailFile] ""
   when (exitCode /= ExitSuccess) $ assertFailure $ formatFailure result mailFile
   removeFile mailFile
   return stdout
