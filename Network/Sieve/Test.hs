@@ -8,15 +8,16 @@ module Network.Sieve.Test (
   Action(..),
   assertMailActions,
   assertMailStoredIn,
-  assertHeaderStoredIn
+  assertHeaderStoredIn,
+  assertHeadersStoredIn
 )
 where
 
 import           Control.Applicative ((<*), (*>))
 import           Control.Monad (when)
-import qualified Data.ByteString.Char8 as BSC (pack)
+import qualified Data.ByteString.Char8 as BSC (ByteString, pack)
 import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
-import qualified Data.Text as T (pack, unpack)
+import qualified Data.Text as T (pack, Text, unpack)
 import           GHC.IO.Exception (ExitCode(..))
 import           Network.Mail.Mime (Address(Address), emptyMail, Mail(..), Part(..), Encoding(..), renderMail')
 import           System.Directory (getCurrentDirectory, getTemporaryDirectory, removeFile)
@@ -37,10 +38,19 @@ addressS s = Address Nothing $ T.pack s
 addressL :: String -> String -> Address
 addressL s t = Address (Just $ T.pack s) $ T.pack t
 
+type Header = (BSC.ByteString, T.Text)
+
+packHeader :: (String, String) -> Header
+packHeader (name, value) = (BSC.pack name, T.pack value)
+
 addHeader :: Mail -> (String, String) -> Mail
-addHeader m (name, value) = m { mailHeaders = new }
+addHeader mail header = addHeaders mail [header]
+
+addHeaders :: Mail -> [(String, String)] -> Mail
+addHeaders mail headers = mail { mailHeaders = new }
   where
-    new = mailHeaders m ++ [(BSC.pack name, T.pack value)]
+    new :: [Header]
+    new = mailHeaders mail ++ fmap packHeader headers
 
 textPart :: String -> Part
 textPart t = Part {
@@ -144,3 +154,6 @@ assertMailStoredIn mail folder = assertMailActions mail ([Store folder], [])
 
 assertHeaderStoredIn :: (String, String) -> String -> IO ()
 assertHeaderStoredIn header = assertMailStoredIn (addHeader nilMail header)
+
+assertHeadersStoredIn :: [(String, String)] -> String -> IO ()
+assertHeadersStoredIn headers = assertMailStoredIn (addHeaders nilMail headers)
