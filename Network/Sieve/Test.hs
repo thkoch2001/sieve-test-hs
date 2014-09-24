@@ -19,7 +19,7 @@ import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
 import qualified Data.Text as T (pack, unpack)
 import           GHC.IO.Exception (ExitCode(..))
 import           Network.Mail.Mime (Address(Address), emptyMail, Mail(..), Part(..), Encoding(..), renderMail')
-import           System.Directory (getTemporaryDirectory, removeFile)
+import           System.Directory (getCurrentDirectory, getTemporaryDirectory, removeFile)
 import           System.IO (hClose)
 import           System.IO.Temp (openBinaryTempFile)
 import           System.Process (readProcessWithExitCode)
@@ -123,7 +123,8 @@ parseSieveTestResult = do
 
 assertMailActions :: Mail -> Actions -> IO ()
 assertMailActions mail expectedActions = do
-    sieveTestOut <- runSieveTestWithMail "/home/thkoch/testsieve" mail
+    currentDir <- getCurrentDirectory
+    sieveTestOut <- runSieveTestWithMail (currentDir ++ "/test.sieve") mail
     actualActions <- parseSieveTestOut sieveTestOut
     assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
     return ()
