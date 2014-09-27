@@ -43,5 +43,5 @@ if exists "list-id" { # Mailman & other lists using list-id
 }
 
 if not string :is "${listname}" "" {
-  fileinto "list.${listname}";
+  fileinto :create "list.${listname}";
 }

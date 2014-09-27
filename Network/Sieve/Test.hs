@@ -29,7 +29,7 @@ import           Text.Parsec (parse)
 import           Text.Parsec.Char (string, char, noneOf)
 import           Text.Parsec.Combinator (many1, choice)
 import           Text.Parsec.Error (ParseError)
-import           Text.Parsec.Prim ((<|>))
+import           Text.Parsec.Prim (try)
 import           Text.Parsec.String (Parser)
 
 addressS :: String -> Address
@@ -96,7 +96,8 @@ runSieveTestWithMail filter mail = do
        ++ "\nstderr:\n" ++ stderr
 
 data Action =
-  Store String
+    Store String
+  | CreateMailboxIfNotExist
   deriving (Show, Eq, Ord)
 
 type Actions = ([Action], [Action])
@@ -114,14 +115,16 @@ parseSieveTestResult = do
     actionLines = fmap concat $ many1 actionLine
     actionLine :: Parser [Action]
     actionLine = char ' ' *> action <* char '\n'
-    action = none <|> someAction
+    action :: Parser [Action]
+    action = choice [none, someAction, someSideEffect]
     none :: Parser [Action]
     none = do
-      string " (none)"
+      try $ string " (none)"
       return []
+    -- sieve_result_action_printf in src/lib-sieve/sieve-result.c
     someAction :: Parser [Action]
     someAction = do
-      string "* "
+      try $ string "* "
       action <- choice [
           storeAction
         ]
@@ -130,6 +133,18 @@ parseSieveTestResult = do
     storeAction = do
       folder <- string "store message in folder: " *> many1 (noneOf "\n")
       return $ Store folder
+    -- sieve_result_seffect_printf in src/lib-sieve/sieve-result.c
+    someSideEffect :: Parser [Action]
+    someSideEffect = do
+      try $ string "       + "
+      action <- choice [
+          createMailboxAction
+        ]
+      return [action]
+    createMailboxAction :: Parser Action
+    createMailboxAction = do
+      string "create mailbox if it does not exist"
+      return CreateMailboxIfNotExist
 
 assertMailActions :: Mail -> Actions -> IO ()
 assertMailActions mail expectedActions = do
@@ -150,7 +165,7 @@ assertMailActions mail expectedActions = do
       (Right actions) -> return actions
 
 assertMailStoredIn :: Mail -> String -> IO ()
-assertMailStoredIn mail folder = assertMailActions mail ([Store folder], [])
+assertMailStoredIn mail folder = assertMailActions mail ([Store folder, CreateMailboxIfNotExist], [])
 
 assertHeaderStoredIn :: (String, String) -> String -> IO ()
 assertHeaderStoredIn header = assertMailStoredIn (addHeader nilMail header)
