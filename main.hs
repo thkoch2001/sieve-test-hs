@@ -6,7 +6,7 @@ import Test.HUnit.Base (Test(..))
 
 mailingListHeadersToTestCase :: ([(String, String)], String) -> Test
 mailingListHeadersToTestCase (headers, folder) =
-  TestCase $ assertHeadersStoredIn headers $ "list." ++ folder
+  TestCase $ assertHeadersStoredIn headers $ "list/" ++ folder
 
 mailingListHeadersTests :: Test
 mailingListHeadersTests = TestList $ map f cases

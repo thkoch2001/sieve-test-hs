@@ -6,6 +6,9 @@ require [ "regex", "variables", "fileinto", "envelope", "mailbox" ];
 # elsif exists "x-loop" {
 # I don't have any of these to compare against now
 
+set "SEP" "/";
+set "LISTPREFIX" "list";
+
 if exists "list-id" { # Mailman & other lists using list-id
   if header :regex "list-id" "<([a-z0-9-]+)[.@]" {
     set :lower "listname" "${1}";
@@ -43,5 +46,5 @@ if exists "list-id" { # Mailman & other lists using list-id
 }
 
 if not string :is "${listname}" "" {
-  fileinto :create "list.${listname}";
+  fileinto :create "${LISTPREFIX}${SEP}${listname}";
 }
