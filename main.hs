@@ -98,10 +98,27 @@ multipleMailingListHeadersTests = TestList $ map mailingListHeadersToTestCase ca
       )
       ]
 
+discardHeadersTests :: Test
+discardHeadersTests = TestList $ fmap headersToTest cases
+  where
+    headersToTest :: [(String, String)] -> Test
+    headersToTest headers = TestCase $ assertMailActions
+      (addHeaders nilMail headers)
+      ([Discard],[])
+    cases :: [[(String, String)]]
+    cases = [
+        [("subject", "BarCamp was edited"),
+         ("from", "PBworks Changebot <notification@pbworks.com>")
+          ],
+        [("from", "\"werner lutz\" <einheiztext@t-online.de>")
+          ]
+      ]
+
 allTests :: Test
 allTests = TestList [
   mailingListHeadersTests,
-  multipleMailingListHeadersTests
+  multipleMailingListHeadersTests,
+  discardHeadersTests
   ]
 
 main :: IO ()

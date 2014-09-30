@@ -9,6 +9,19 @@ require [ "regex", "variables", "fileinto", "envelope", "mailbox" ];
 set "SEP" "/";
 set "LISTPREFIX" "list";
 
+if header :is "from" "PBworks Changebot <notification@pbworks.com>" {
+  if header :is "subject" "BarCamp was edited" {
+    discard;
+    stop;
+  }
+}
+
+if address :is "from" "einheiztext@t-online.de" {
+  discard;
+  stop;
+}
+
+
 if exists "list-id" { # Mailman & other lists using list-id
   if header :regex "list-id" "<([a-z0-9-]+)[.@]" {
     set :lower "listname" "${1}";

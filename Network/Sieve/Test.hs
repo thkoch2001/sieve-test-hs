@@ -4,6 +4,7 @@ module Network.Sieve.Test (
   addressS,
   addressL,
   addHeader,
+  addHeaders,
   nilMail,
   Action(..),
   assertMailActions,
@@ -13,7 +14,7 @@ module Network.Sieve.Test (
 )
 where
 
-import           Control.Applicative ((<*), (*>))
+import           Control.Applicative ((<*), (*>), (<$>))
 import           Control.Monad (when)
 import qualified Data.ByteString.Char8 as BSC (ByteString, pack)
 import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
@@ -96,8 +97,12 @@ runSieveTestWithMail filter mail = do
        ++ "\nstderr:\n" ++ stderr
 
 data Action =
+    -- actions
     Store String
+  | Discard
+    -- side effects
   | CreateMailboxIfNotExist
+
   deriving (Show, Eq, Ord)
 
 type Actions = ([Action], [Action])
@@ -125,26 +130,23 @@ parseSieveTestResult = do
     someAction :: Parser [Action]
     someAction = do
       try $ string "* "
-      action <- choice [
-          storeAction
+      (:[]) <$> choice [
+          storeAction,
+          discardAction
         ]
-      return [action]
     storeAction :: Parser Action
-    storeAction = do
-      folder <- string "store message in folder: " *> many1 (noneOf "\n")
-      return $ Store folder
+    storeAction = Store <$> (string "store message in folder: " *> many1 (noneOf "\n"))
+    discardAction :: Parser Action
+    discardAction = string "discard" *> return Discard
     -- sieve_result_seffect_printf in src/lib-sieve/sieve-result.c
     someSideEffect :: Parser [Action]
     someSideEffect = do
       try $ string "       + "
-      action <- choice [
+      (:[]) <$> choice [
           createMailboxAction
         ]
-      return [action]
     createMailboxAction :: Parser Action
-    createMailboxAction = do
-      string "create mailbox if it does not exist"
-      return CreateMailboxIfNotExist
+    createMailboxAction = string "create mailbox if it does not exist" *> return CreateMailboxIfNotExist
 
 assertMailActions :: Mail -> Actions -> IO ()
 assertMailActions mail expectedActions = do
