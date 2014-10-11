@@ -1,17 +1,31 @@
 module Main where
 
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (ask, ReaderT, runReaderT)
 import Network.Sieve.Test
 import Test.HUnit (runTestTT)
 import Test.HUnit.Base (Test(..))
+import Test.HUnit.Lang (Assertion)
 
-mailingListHeadersToTestCase :: ([(String, String)], String) -> Test
+-- testCaseM :: IO () -> Assertion -> Reader Config Test
+-- testCaseM io test = do
+--   config <- ask
+--  return $ TestCase $ (runReaderT te)
+
+type ConfigAssertion = ReaderT Config IO ()
+type ConfigRunner = ConfigAssertion -> Assertion
+
+configureAssertion :: Config -> ConfigAssertion -> Assertion
+configureAssertion config reader = runReaderT reader config
+
+mailingListHeadersToTestCase :: ([(String, String)], String) -> ConfigAssertion
 mailingListHeadersToTestCase (headers, folder) =
-  TestCase $ assertHeadersStoredIn headers $ "list/" ++ folder
+  assertHeadersStoredIn headers $ "list/" ++ folder
 
-mailingListHeadersTests :: Test
-mailingListHeadersTests = TestList $ map f cases
+mailingListHeadersTests :: [ConfigAssertion]
+mailingListHeadersTests = map f cases
   where
-    f :: (String, String, String) -> Test
+    f :: (String, String, String) -> ConfigAssertion
     f (name, value, folder) = mailingListHeadersToTestCase ([(name, value)], folder)
     cases :: [(String, String, String)]
     cases = [
@@ -29,8 +43,8 @@ mailingListHeadersTests = TestList $ map f cases
       ("List-Id", "<695666.bugs.debian.org>", "695666")
       ]
 
-multipleMailingListHeadersTests :: Test
-multipleMailingListHeadersTests = TestList $ map mailingListHeadersToTestCase cases
+multipleMailingListHeadersTests :: [ConfigAssertion]
+multipleMailingListHeadersTests = map mailingListHeadersToTestCase cases
   where
     cases :: [([(String, String)], String)]
     cases = [
@@ -98,11 +112,11 @@ multipleMailingListHeadersTests = TestList $ map mailingListHeadersToTestCase ca
       )
       ]
 
-discardHeadersTests :: Test
-discardHeadersTests = TestList $ fmap headersToTest cases
+discardHeadersTests :: [ConfigAssertion]
+discardHeadersTests = fmap headersToTest cases
   where
-    headersToTest :: [(String, String)] -> Test
-    headersToTest headers = TestCase $ assertMailActions
+    headersToTest :: [(String, String)] -> ConfigAssertion
+    headersToTest headers = assertMailActions
       (addHeaders nilMail headers)
       ([Discard],[])
     cases :: [[(String, String)]]
@@ -114,14 +128,18 @@ discardHeadersTests = TestList $ fmap headersToTest cases
           ]
       ]
 
-allTests :: Test
-allTests = TestList [
+allTests :: Config -> Test
+allTests config = TestList $ map toTest [
   mailingListHeadersTests,
   multipleMailingListHeadersTests,
   discardHeadersTests
   ]
+  where
+    toTest :: [ConfigAssertion] -> Test
+    toTest = TestList . map (TestCase . configureAssertion config)
 
 main :: IO ()
 main = do
-  runTestTT allTests
+  config <- return Config { extensions = "regex variables fileinto envelope mailbox" }
+  runTestTT $ allTests config
   return ()

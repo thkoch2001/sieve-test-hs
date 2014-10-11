@@ -5,6 +5,7 @@ module Network.Sieve.Test (
   addressL,
   addHeader,
   addHeaders,
+  Config(..),
   nilMail,
   Action(..),
   assertMailActions,
@@ -16,6 +17,8 @@ where
 
 import           Control.Applicative ((<*), (*>), (<$>))
 import           Control.Monad (when)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Reader (ask, ReaderT)
 import qualified Data.ByteString.Char8 as BSC (ByteString, pack)
 import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
 import qualified Data.Text as T (pack, Text, unpack)
@@ -32,6 +35,10 @@ import           Text.Parsec.Combinator (many1, choice)
 import           Text.Parsec.Error (ParseError)
 import           Text.Parsec.Prim (try)
 import           Text.Parsec.String (Parser)
+
+data Config = Config {
+    extensions :: String
+  } deriving (Show)
 
 addressS :: String -> Address
 addressS s = Address Nothing $ T.pack s
@@ -72,21 +79,22 @@ nilMail = (emptyMail $ addressS "nobody@example.com") {
     mailParts = [[textPart ""]]
   }
 
-writeMailTemp :: Mail -> IO FilePath
+writeMailTemp :: Mail -> ReaderT Config IO FilePath
 writeMailTemp mail = do
-    tempDir <- getTemporaryDirectory
-    pathAndHandle <- openBinaryTempFile tempDir "testsieve.mail"
-    renderedMail <- renderMail' mail
-    BSLC.hPutStr (snd pathAndHandle) renderedMail
-    hClose $ snd pathAndHandle
+    tempDir <- liftIO $ getTemporaryDirectory
+    pathAndHandle <- liftIO $ openBinaryTempFile tempDir "testsieve.mail"
+    renderedMail <- liftIO $ renderMail' mail
+    liftIO $ BSLC.hPutStr (snd pathAndHandle) renderedMail
+    liftIO $ hClose $ snd pathAndHandle
     return $ fst pathAndHandle
 
-runSieveTestWithMail :: FilePath -> Mail -> IO String
+runSieveTestWithMail :: FilePath -> Mail -> ReaderT Config IO String
 runSieveTestWithMail filter mail = do
+  extensions <- extensions <$> ask
   mailFile <- writeMailTemp mail
-  result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", "regex variables fileinto envelope mailbox", filter, mailFile] ""
-  when (exitCode /= ExitSuccess) $ assertFailure $ formatFailure result mailFile
-  removeFile mailFile
+  result@(exitCode, stdout, _) <- liftIO $ readProcessWithExitCode "sieve-test" ["-x", extensions, filter, mailFile] ""
+  when (exitCode /= ExitSuccess) $ liftIO $ assertFailure $ formatFailure result mailFile
+  liftIO $ removeFile mailFile
   return stdout
   where
     formatFailure :: (ExitCode, String, String) -> FilePath -> String
@@ -148,12 +156,12 @@ parseSieveTestResult = do
     createMailboxAction :: Parser Action
     createMailboxAction = string "create mailbox if it does not exist" *> return CreateMailboxIfNotExist
 
-assertMailActions :: Mail -> Actions -> IO ()
+assertMailActions :: Mail -> Actions -> ReaderT Config IO ()
 assertMailActions mail expectedActions = do
-    currentDir <- getCurrentDirectory
+    currentDir <- liftIO $ getCurrentDirectory
     sieveTestOut <- runSieveTestWithMail (currentDir ++ "/test.sieve") mail
-    actualActions <- parseSieveTestOut sieveTestOut
-    assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
+    actualActions <- liftIO $ parseSieveTestOut sieveTestOut
+    liftIO $ assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
     return ()
   where
     parseSieveTestOut :: String -> IO Actions
@@ -166,11 +174,11 @@ assertMailActions mail expectedActions = do
         return ([], [])
       (Right actions) -> return actions
 
-assertMailStoredIn :: Mail -> String -> IO ()
+assertMailStoredIn :: Mail -> String -> ReaderT Config IO ()
 assertMailStoredIn mail folder = assertMailActions mail ([Store folder, CreateMailboxIfNotExist], [])
 
-assertHeaderStoredIn :: (String, String) -> String -> IO ()
+assertHeaderStoredIn :: (String, String) -> String -> ReaderT Config IO ()
 assertHeaderStoredIn header = assertMailStoredIn (addHeader nilMail header)
 
-assertHeadersStoredIn :: [(String, String)] -> String -> IO ()
+assertHeadersStoredIn :: [(String, String)] -> String -> ReaderT Config IO ()
 assertHeadersStoredIn headers = assertMailStoredIn (addHeaders nilMail headers)
