@@ -47,6 +47,8 @@ library
 
   build-depends:       base == 4.5.*,
                        mime-mail == 0.4.1.1,
+                       mtl == 2.1.1,
+                       transformers == 0.3.0.0,
                        temporary,
                        directory,
                        process,
@@ -61,6 +63,8 @@ executable sieve-test-hs
   main-is: main.hs
   build-depends:       base == 4.5.*,
                        mime-mail == 0.4.1.1,
+                       mtl == 2.1.1,
+                       transformers == 0.3.0.0,
                        temporary,
                        directory,
                        process,

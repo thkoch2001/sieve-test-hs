@@ -81,7 +81,7 @@ nilMail = (emptyMail $ addressS "nobody@example.com") {
 
 writeMailTemp :: Mail -> ReaderT Config IO FilePath
 writeMailTemp mail = do
-    tempDir <- liftIO $ getTemporaryDirectory
+    tempDir <- liftIO getTemporaryDirectory
     pathAndHandle <- liftIO $ openBinaryTempFile tempDir "testsieve.mail"
     renderedMail <- liftIO $ renderMail' mail
     liftIO $ BSLC.hPutStr (snd pathAndHandle) renderedMail
@@ -158,7 +158,7 @@ parseSieveTestResult = do
 
 assertMailActions :: Mail -> Actions -> ReaderT Config IO ()
 assertMailActions mail expectedActions = do
-    currentDir <- liftIO $ getCurrentDirectory
+    currentDir <- liftIO getCurrentDirectory
     sieveTestOut <- runSieveTestWithMail (currentDir ++ "/test.sieve") mail
     actualActions <- liftIO $ parseSieveTestOut sieveTestOut
     liftIO $ assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions

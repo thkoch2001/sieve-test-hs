@@ -140,6 +140,6 @@ allTests config = TestList $ map toTest [
 
 main :: IO ()
 main = do
-  config <- return Config { extensions = "regex variables fileinto envelope mailbox" }
+  let config = Config { extensions = "regex variables fileinto envelope mailbox" }
   runTestTT $ allTests config
   return ()
