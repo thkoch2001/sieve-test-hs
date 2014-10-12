@@ -18,7 +18,7 @@ where
 import           Control.Applicative ((<*), (*>), (<$>))
 import           Control.Monad (when)
 import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Reader (ask, ReaderT)
+import           Control.Monad.Reader (asks, ReaderT)
 import qualified Data.ByteString.Char8 as BSC (ByteString, pack)
 import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
 import qualified Data.Text as T (pack, Text, unpack)
@@ -91,8 +91,8 @@ writeMailTemp mail = do
 
 runSieveTestWithMail :: Mail -> ReaderT Config IO String
 runSieveTestWithMail mail = do
-  sieveFile <- sieveFile <$> ask
-  extensions <- extensions <$> ask
+  sieveFile <- asks sieveFile
+  extensions <- asks extensions
   liftIO $ run mail sieveFile extensions
   where
     run :: Mail -> FilePath -> String -> IO String

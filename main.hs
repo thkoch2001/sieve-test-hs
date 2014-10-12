@@ -1,17 +1,11 @@
 module Main where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ask, ReaderT, runReaderT)
+import Control.Monad.Reader (ReaderT, runReaderT)
 import Network.Sieve.Test
+import System.Directory (getCurrentDirectory)
 import Test.HUnit (runTestTT)
 import Test.HUnit.Base (Test(..))
 import Test.HUnit.Lang (Assertion)
-import           System.Directory (getCurrentDirectory)
-
--- testCaseM :: IO () -> Assertion -> Reader Config Test
--- testCaseM io test = do
---   config <- ask
---  return $ TestCase $ (runReaderT te)
 
 type ConfigAssertion = ReaderT Config IO ()
 type ConfigRunner = ConfigAssertion -> Assertion
@@ -142,10 +136,10 @@ allTests config = TestList $ map toTest [
 main :: IO ()
 main = do
   currentDir <- getCurrentDirectory
-  let sieveFile = currentDir ++ "/test.sieve"
+  let sieveFilePath = currentDir ++ "/test.sieve"
   let config = Config {
     extensions = "regex variables fileinto envelope mailbox",
-    sieveFile = sieveFile
+    sieveFile = sieveFilePath
   }
   runTestTT $ allTests config
   return ()
