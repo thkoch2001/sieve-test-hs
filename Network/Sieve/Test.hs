@@ -24,7 +24,7 @@ import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
 import qualified Data.Text as T (pack, Text, unpack)
 import           GHC.IO.Exception (ExitCode(..))
 import           Network.Mail.Mime (Address(Address), emptyMail, Mail(..), Part(..), Encoding(..), renderMail')
-import           System.Directory (getCurrentDirectory, getTemporaryDirectory, removeFile)
+import           System.Directory (getTemporaryDirectory, removeFile)
 import           System.IO (hClose)
 import           System.IO.Temp (openBinaryTempFile)
 import           System.Process (readProcessWithExitCode)
@@ -37,7 +37,8 @@ import           Text.Parsec.Prim (try)
 import           Text.Parsec.String (Parser)
 
 data Config = Config {
-    extensions :: String
+    extensions :: String,
+    sieveFile :: FilePath
   } deriving (Show)
 
 addressS :: String -> Address
@@ -79,24 +80,28 @@ nilMail = (emptyMail $ addressS "nobody@example.com") {
     mailParts = [[textPart ""]]
   }
 
-writeMailTemp :: Mail -> ReaderT Config IO FilePath
+writeMailTemp :: Mail -> IO FilePath
 writeMailTemp mail = do
-    tempDir <- liftIO getTemporaryDirectory
-    pathAndHandle <- liftIO $ openBinaryTempFile tempDir "testsieve.mail"
-    renderedMail <- liftIO $ renderMail' mail
-    liftIO $ BSLC.hPutStr (snd pathAndHandle) renderedMail
-    liftIO $ hClose $ snd pathAndHandle
+    tempDir <- getTemporaryDirectory
+    pathAndHandle <- openBinaryTempFile tempDir "testsieve.mail"
+    renderedMail <- renderMail' mail
+    BSLC.hPutStr (snd pathAndHandle) renderedMail
+    hClose $ snd pathAndHandle
     return $ fst pathAndHandle
 
-runSieveTestWithMail :: FilePath -> Mail -> ReaderT Config IO String
-runSieveTestWithMail filter mail = do
+runSieveTestWithMail :: Mail -> ReaderT Config IO String
+runSieveTestWithMail mail = do
+  sieveFile <- sieveFile <$> ask
   extensions <- extensions <$> ask
-  mailFile <- writeMailTemp mail
-  result@(exitCode, stdout, _) <- liftIO $ readProcessWithExitCode "sieve-test" ["-x", extensions, filter, mailFile] ""
-  when (exitCode /= ExitSuccess) $ liftIO $ assertFailure $ formatFailure result mailFile
-  liftIO $ removeFile mailFile
-  return stdout
+  liftIO $ run mail sieveFile extensions
   where
+    run :: Mail -> FilePath -> String -> IO String
+    run mail sieveFile extensions = do
+      mailFile <- writeMailTemp mail
+      result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", extensions, sieveFile, mailFile] ""
+      when (exitCode /= ExitSuccess) $ assertFailure $ formatFailure result mailFile
+      removeFile mailFile
+      return stdout
     formatFailure :: (ExitCode, String, String) -> FilePath -> String
     formatFailure (ExitFailure code, stdout, stderr) mailFile =
        "error code " ++ show code ++ " for sieve-test on '"
@@ -158,11 +163,10 @@ parseSieveTestResult = do
 
 assertMailActions :: Mail -> Actions -> ReaderT Config IO ()
 assertMailActions mail expectedActions = do
-    currentDir <- liftIO getCurrentDirectory
-    sieveTestOut <- runSieveTestWithMail (currentDir ++ "/test.sieve") mail
-    actualActions <- liftIO $ parseSieveTestOut sieveTestOut
-    liftIO $ assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
-    return ()
+    sieveTestOut <- runSieveTestWithMail mail
+    liftIO $ do
+      actualActions <- parseSieveTestOut sieveTestOut
+      assertEqual ("unexpected Actions: " ++ sieveTestOut) expectedActions actualActions
   where
     parseSieveTestOut :: String -> IO Actions
     parseSieveTestOut s = case parse parseSieveTestResult "" s of

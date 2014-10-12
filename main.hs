@@ -6,6 +6,7 @@ import Network.Sieve.Test
 import Test.HUnit (runTestTT)
 import Test.HUnit.Base (Test(..))
 import Test.HUnit.Lang (Assertion)
+import           System.Directory (getCurrentDirectory)
 
 -- testCaseM :: IO () -> Assertion -> Reader Config Test
 -- testCaseM io test = do
@@ -140,6 +141,11 @@ allTests config = TestList $ map toTest [
 
 main :: IO ()
 main = do
-  let config = Config { extensions = "regex variables fileinto envelope mailbox" }
+  currentDir <- getCurrentDirectory
+  let sieveFile = currentDir ++ "/test.sieve"
+  let config = Config {
+    extensions = "regex variables fileinto envelope mailbox",
+    sieveFile = sieveFile
+  }
   runTestTT $ allTests config
   return ()
