@@ -21,8 +21,16 @@ if address :is "from" "einheiztext@t-online.de" {
   stop;
 }
 
-
-if exists "list-id" { # Mailman & other lists using list-id
+if allof (
+    exists "List-Unsubscribe",
+    header :regex "From" "<([a-z0-9-]+)@cooperpress.com") {
+  # postgres, frontendfocus, newsletter
+  set :lower "listname" "cp-${1}";
+} elsif allof (
+  header :regex "X-Mailer" "^Mailchimp .+",
+  header :regex "List-Unsubscribe" "<http://([a-z0-9-]+)\.") {
+  set :lower "listname" "mc-${1}";
+} elsif exists "list-id" { # Mailman & other lists using list-id
   if header :regex "list-id" "<([a-z0-9-]+)[.@]" {
     set :lower "listname" "${1}";
   } elsif header :regex "list-id" "^\\s*<?([a-z0-9-]+)[.@]" {

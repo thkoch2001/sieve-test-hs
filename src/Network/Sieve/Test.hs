@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -w -fno-warn-orphans #-}
-
 module Network.Sieve.Test (
   addressS,
   addressL,
@@ -15,30 +13,34 @@ module Network.Sieve.Test (
 )
 where
 
-import           Control.Applicative ((<*), (*>), (<$>))
-import           Control.Monad (when)
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Reader (asks, ReaderT)
-import qualified Data.ByteString.Char8 as BSC (ByteString, pack)
-import qualified Data.ByteString.Lazy.Char8 as BSLC (pack, hPutStr)
-import qualified Data.Text as T (pack, Text, unpack)
-import           GHC.IO.Exception (ExitCode(..))
-import           Network.Mail.Mime (Address(Address), emptyMail, Mail(..), Part(..), Encoding(..), renderMail')
-import           System.Directory (getTemporaryDirectory, removeFile)
-import           System.IO (hClose)
-import           System.IO.Temp (openBinaryTempFile)
-import           System.Process (readProcessWithExitCode)
-import           Test.HUnit.Base (assertFailure, assertEqual)
-import           Text.Parsec (parse)
-import           Text.Parsec.Char (string, char, noneOf)
-import           Text.Parsec.Combinator (many1, choice)
-import           Text.Parsec.Error (ParseError)
-import           Text.Parsec.Prim (try)
-import           Text.Parsec.String (Parser)
+import           Control.Applicative        ((*>), (<$>), (<*))
+import           Control.Monad              (void, when)
+import           Control.Monad.IO.Class     (liftIO)
+import           Control.Monad.Reader       (ReaderT, asks)
+import qualified Data.ByteString.Char8      as BSC (ByteString, pack)
+import qualified Data.ByteString.Lazy.Char8 as BSLC (hPutStr, pack)
+import qualified Data.Text                  as T (Text, pack)
+import           GHC.IO.Exception           (ExitCode (ExitFailure, ExitSuccess))
+import           Network.Mail.Mime          (Address (Address),
+                                             Encoding (QuotedPrintableText),
+                                             Mail (mailHeaders, mailParts),
+                                             Part (Part, partContent, partEncoding, partFilename, partHeaders, partType),
+                                             emptyMail, renderMail')
+import           System.Directory           (getTemporaryDirectory, removeFile)
+import           System.IO                  (hClose)
+import           System.IO.Temp             (openBinaryTempFile)
+import           System.Process             (readProcessWithExitCode)
+import           Test.HUnit.Base            (assertEqual, assertFailure)
+import           Text.Parsec                (parse)
+import           Text.Parsec.Char           (char, noneOf, string)
+import           Text.Parsec.Combinator     (choice, many1)
+import           Text.Parsec.Error          ()
+import           Text.Parsec.Prim           (try)
+import           Text.Parsec.String         (Parser)
 
 data Config = Config {
     extensions :: String,
-    sieveFile :: FilePath
+    sieveFile  :: FilePath
   } deriving (Show)
 
 addressS :: String -> Address
@@ -70,11 +72,6 @@ textPart t = Part {
   partContent = BSLC.pack t
   }
 
--- added no-warn-orphans for this declaration
-instance Show Address where
-  show (Address Nothing addr) = T.unpack addr
-  show (Address (Just name) addr) = T.unpack name ++ " <" ++ T.unpack addr ++ ">"
-
 nilMail :: Mail
 nilMail = (emptyMail $ addressS "nobody@example.com") {
     mailParts = [[textPart ""]]
@@ -91,14 +88,14 @@ writeMailTemp mail = do
 
 runSieveTestWithMail :: Mail -> ReaderT Config IO String
 runSieveTestWithMail mail = do
-  sieveFile <- asks sieveFile
-  extensions <- asks extensions
-  liftIO $ run mail sieveFile extensions
+  cfg_sieveFile <- asks sieveFile
+  cfg_extensions <- asks extensions
+  liftIO $ run cfg_sieveFile cfg_extensions
   where
-    run :: Mail -> FilePath -> String -> IO String
-    run mail sieveFile extensions = do
+    run :: FilePath -> String -> IO String
+    run cfg_sieveFile cfg_extensions = do
       mailFile <- writeMailTemp mail
-      result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", extensions, sieveFile, mailFile] ""
+      result@(exitCode, stdout, _) <- readProcessWithExitCode "sieve-test" ["-x", cfg_extensions, cfg_sieveFile, mailFile] ""
       when (exitCode /= ExitSuccess) $ assertFailure $ formatFailure result mailFile
       removeFile mailFile
       return stdout
@@ -108,6 +105,7 @@ runSieveTestWithMail mail = do
        ++ mailFile ++ "':\n"
        ++ "stdout:\n" ++ stdout
        ++ "\nstderr:\n" ++ stderr
+    formatFailure _ _ = error "this should never happen :-)"
 
 data Action =
     -- actions
@@ -122,11 +120,11 @@ type Actions = ([Action], [Action])
 
 parseSieveTestResult :: Parser Actions
 parseSieveTestResult = do
-    string "\nPerformed actions:\n\n"
+    void $ string "\nPerformed actions:\n\n"
     performedActions <- actionLines
-    string "\nImplicit keep:\n\n"
+    void $ string "\nImplicit keep:\n\n"
     implicitKeep <- actionLines
-    char '\n'
+    void $ char '\n'
     return (performedActions, implicitKeep)
   where
     actionLines :: Parser [Action]
@@ -137,12 +135,12 @@ parseSieveTestResult = do
     action = choice [none, someAction, someSideEffect]
     none :: Parser [Action]
     none = do
-      try $ string " (none)"
+      void $ try $ string " (none)"
       return []
     -- sieve_result_action_printf in src/lib-sieve/sieve-result.c
     someAction :: Parser [Action]
     someAction = do
-      try $ string "* "
+      void $ try $ string "* "
       (:[]) <$> choice [
           storeAction,
           discardAction
@@ -154,7 +152,7 @@ parseSieveTestResult = do
     -- sieve_result_seffect_printf in src/lib-sieve/sieve-result.c
     someSideEffect :: Parser [Action]
     someSideEffect = do
-      try $ string "       + "
+      void $ try $ string "       + "
       (:[]) <$> choice [
           createMailboxAction
         ]
@@ -170,9 +168,9 @@ assertMailActions mail expectedActions = do
   where
     parseSieveTestOut :: String -> IO Actions
     parseSieveTestOut s = case parse parseSieveTestResult "" s of
-      (Left error) -> do
+      (Left err) -> do
         assertFailure $ "could not parse output from sieve-test:\n"
-          ++ show error
+          ++ show err
           ++ "output was:\n"
           ++ s
         return ([], [])

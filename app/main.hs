@@ -1,11 +1,15 @@
 module Main where
 
-import Control.Monad.Reader (ReaderT, runReaderT)
-import Network.Sieve.Test
-import System.Directory (getCurrentDirectory)
-import Test.HUnit (runTestTT)
-import Test.HUnit.Base (Test(..))
-import Test.HUnit.Lang (Assertion)
+import           Control.Monad        (void)
+import           Control.Monad.Reader (ReaderT, runReaderT)
+import           Network.Sieve.Test   (Action (Discard), Config (Config),
+                                       addHeaders, assertHeadersStoredIn,
+                                       assertMailActions, extensions, nilMail,
+                                       sieveFile)
+import           System.Directory     (getCurrentDirectory)
+import           Test.HUnit           (runTestTT)
+import           Test.HUnit.Base      (Test (TestCase, TestList))
+import           Test.HUnit.Lang      (Assertion)
 
 type ConfigAssertion = ReaderT Config IO ()
 type ConfigRunner = ConfigAssertion -> Assertion
@@ -104,6 +108,16 @@ multipleMailingListHeadersTests = map mailingListHeadersToTestCase cases
         ("List-ID", "b4a4054cce715a3b0ae5e7d35mc list <b4a4054cce715a3b0ae5e7d35.87653.list-id.mcsv.net>")
        ],
        "b4a4054cce715a3b0ae5e7d35"
+      ),
+      ([("From", "Postgres Weekly <postgres@cooperpress.com>"),
+        ("List-Unsubscribe", "whatever")
+       ],
+       "cp-postgres"
+      ),
+      ([("X-Mailer", "MailChimp whatever"),
+        ("List-Unsubscribe", "<http://wcszh.us7.list")
+       ],
+       "mc-wcszh"
       )
       ]
 
@@ -141,5 +155,5 @@ main = do
     extensions = "regex variables fileinto envelope mailbox",
     sieveFile = sieveFilePath
   }
-  runTestTT $ allTests config
+  void $ runTestTT $ allTests config
   return ()
